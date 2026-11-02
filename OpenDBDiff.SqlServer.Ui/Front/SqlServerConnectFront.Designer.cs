@@ -108,7 +108,7 @@ namespace OpenDBDiff.SqlServer.Ui
             this.cboAuthentication.Items.AddRange(new object[] {
             "Windows Authentication",
             "SQL Server Authentication",
-            "Active Directory Interactive",
+            "Azure DB",
             "Active Directory Integrated",
             "Active Directory Password",
             "Active Directory Default"});

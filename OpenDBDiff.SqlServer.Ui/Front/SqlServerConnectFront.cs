@@ -35,7 +35,7 @@ namespace OpenDBDiff.SqlServer.Ui
             {
                 "Windows Authentication",
                 "SQL Server Authentication",
-                "Active Directory Interactive",
+                "Azure DB",
                 "Active Directory Integrated",
                 "Active Directory Password",
                 "Active Directory Default"
@@ -43,13 +43,13 @@ namespace OpenDBDiff.SqlServer.Ui
             authenticationToolTip = new ToolTip();
             authenticationToolTip.SetToolTip(cboAuthentication,
                 "Windows and SQL Server authentication are unchanged.\r\n" +
-                "Active Directory Interactive signs in through the browser and supports MFA.\r\n" +
+                "Azure DB signs in through the browser and supports MFA (Active Directory Interactive).\r\n" +
                 "Active Directory Integrated uses the domain account (not the same as Windows authentication).\r\n" +
                 "Active Directory Password is the deprecated Entra username and password flow.\r\n" +
                 "Active Directory Default uses Azure CLI, Visual Studio, environment or managed identity credentials.");
             authenticationToolTip.SetToolTip(txtUsername,
                 "SQL login, or a Microsoft Entra user such as user@contoso.com.\r\n" +
-                "For Active Directory Interactive this is an optional sign-in hint, not a password.");
+                "For Azure DB this is an optional sign-in hint, not a password.");
             authenticationToolTip.SetToolTip(txtTenantId,
                 "Optional Entra tenant id or domain, for example contoso.onmicrosoft.com.\r\n" +
                 "Leave this blank to use the tenant the server publishes. It applies to the Active Directory modes.");
@@ -250,7 +250,7 @@ namespace OpenDBDiff.SqlServer.Ui
                 return "";
             return "\r\n\r\nFor Azure SQL, type the database name if the list stays empty. " +
                 "A contained Entra user often cannot open master, and sys.databases in a user database returns only that database. " +
-                "Active Directory Interactive opens a browser window; the connection waits two minutes so MFA can finish.";
+                "Azure DB opens a browser window; the connection waits two minutes so MFA can finish.";
         }
 
         private void AddComboItem(string item)

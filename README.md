@@ -53,7 +53,7 @@ Windows Authentication and SQL Server Authentication are built the same way as b
 
 The pictures below are **layout mockups** of the WinForms connection dialog (the GUI runs on Windows). They follow the control layout: which fields are enabled, and what each mode asks for.
 
-![Source database on Active Directory Interactive, destination on Windows Authentication](docs/images/connection-source-and-destination.png)
+![Source database on Azure DB, destination on Windows Authentication](docs/images/connection-source-and-destination.png)
 
 ### Authentication modes
 
@@ -61,12 +61,12 @@ The pictures below are **layout mockups** of the WinForms connection dialog (the
 | --- | --- | --- | --- | --- |
 | Windows Authentication | Unchanged. The Windows account connects directly to SQL Server. | Disabled | Disabled | Disabled |
 | SQL Server Authentication | Unchanged. A SQL login and password. | Required | Used | Disabled |
-| Active Directory Interactive | Microsoft Entra sign-in in a browser, including MFA. This is the mode to use for a person at the keyboard. The connection waits 120 seconds so the prompt can finish. | Optional sign-in hint (`user@contoso.com`) | Disabled | Optional |
+| Azure DB | The dropdown label for Active Directory Interactive. Microsoft Entra sign-in in a browser, including MFA. This is the mode to use for a person at the keyboard. The connection waits 120 seconds so the prompt can finish. Saved projects and the CLI still use `Authentication=Active Directory Interactive`. | Optional sign-in hint (`user@contoso.com`) | Disabled | Optional |
 | Active Directory Integrated | Entra token from the signed-in domain account (Integrated Windows Authentication against Entra). This is not Windows Authentication, and it cannot satisfy an MFA prompt. The WinForms app runs on .NET Framework, which does not accept a username for this mode. | Disabled | Disabled | Optional |
-| Active Directory Password | Entra username and password. Microsoft has deprecated this flow because it cannot do MFA. Prefer Interactive. | Required | Used | Optional |
+| Active Directory Password | Entra username and password. Microsoft has deprecated this flow because it cannot do MFA. Prefer Azure DB. | Required | Used | Optional |
 | Active Directory Default | Tries credentials already on the machine, in order: environment variables, workload identity, managed identity, and developer tools such as Visual Studio, Azure CLI and Azure PowerShell. It does not open a browser. The first connection can be slow. The wait is 120 seconds. | Optional user or client id | Disabled | Optional |
 
-![Active Directory Interactive, with the password box disabled](docs/images/connection-interactive.png)
+![Azure DB, the Active Directory Interactive mode, with the password box disabled](docs/images/connection-interactive.png)
 
 ![Active Directory Password](docs/images/connection-password.png)
 
@@ -102,11 +102,11 @@ Encryption stays on for these modes, and the server certificate is validated. Th
 In either database panel:
 
 1. **Server Host:** the Azure host name. You can include a port (`yourserver.database.windows.net,1433`) or the `tcp:` prefix.
-2. **Authentication:** one of the Active Directory modes. Interactive is the one that supports MFA.
-3. **Username:** the Entra user when the mode asks for it. For Interactive it is only a hint in the browser prompt.
+2. **Authentication:** **Azure DB** for a person signing in with MFA. The other Active Directory entries are Integrated, Password and Default.
+3. **Username:** the Entra user when the mode asks for it. For Azure DB it is only a hint in the browser prompt.
 4. **Tenant ID:** leave blank unless you need to override the server's tenant.
 5. **Database:** type the database name. On Azure SQL Database, `sys.databases` in a user database returns only that database, and a contained user often cannot open `master`, so the drop-down may list a single name or fail until you type one.
-6. **Test**, then compare as usual. Interactive opens a browser window.
+6. **Test**, then compare as usual. Azure DB opens a browser window.
 
 The same connection string works on the CLI (`--before` and `--after`). Examples:
 
@@ -118,7 +118,7 @@ Server=tcp:yourserver.database.windows.net,1433;Database=appdb;Authentication=Ac
 Server=tcp:yourmi.public.uniqueid.database.windows.net,1433;Database=appdb;Authentication=Active Directory Interactive;Encrypt=True
 ```
 
-`Authentication=ActiveDirectoryInteractive` (no spaces) is the same mode. To force a tenant from the CLI, add `Application Name="OpenDBDiff|EntraTenant=contoso.onmicrosoft.com"`.
+`Authentication=ActiveDirectoryInteractive` (no spaces) is the same mode. That keyword is what a saved project stores. The connection dialog shows it as **Azure DB**. To force a tenant from the CLI, add `Application Name="OpenDBDiff|EntraTenant=contoso.onmicrosoft.com"`.
 
 ### Azure SQL Database and Managed Instance
 
