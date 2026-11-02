@@ -7,6 +7,7 @@ using OpenDBDiff.SqlServer.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Options;
 using System;
 using System.Collections.Generic;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -41,7 +42,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
                 if (database.Options.Ignore.FilterTrigger)
                 {
                     root.RaiseOnReading(new ProgressEventArgs("Reading Triggers...", Constants.READING_TRIGGERS));
-                    using (SqlConnection conn = new SqlConnection(connectionString))
+                    using (SqlConnection conn = SqlConnections.Create(connectionString))
                     {
                         using (SqlCommand command = new SqlCommand(GetSQL(database.Info.Version, database.Options), conn))
                         {

@@ -3,6 +3,7 @@ using OpenDBDiff.Abstractions.Schema.Events;
 using OpenDBDiff.Abstractions.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -27,7 +28,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
 
         private static void FillColumnsDependencies(SchemaList<XMLSchema, Database> items, string connectionString)
         {
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(GetSQLColumnsDependencies(), conn))
                 {
@@ -46,15 +47,15 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
 
         public void Fill(Database database, string connectionString)
         {
-            //TODO XML_SCHEMA_NAMESPACE function not supported in Azure, is there a workaround?
-            //not supported in azure yet
-            if (database.Info.Version == DatabaseInfo.SQLServerVersion.SQLServerAzure10) return;
+            // XML_SCHEMA_NAMESPACE() is not supported on Azure SQL Database, so the collection
+            // body cannot be read. Managed Instance supports the function and is still read.
+            if (database.Info.IsAzureSqlDatabase) return;
 
 
             if (database.Options.Ignore.FilterXMLSchema)
             {
                 root.RaiseOnReading(new ProgressEventArgs("Reading XML Schema...", Constants.READING_XMLSCHEMAS));
-                using (SqlConnection conn = new SqlConnection(connectionString))
+                using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     using (SqlCommand command = new SqlCommand(GetSQLXMLSchema(), conn))
                     {

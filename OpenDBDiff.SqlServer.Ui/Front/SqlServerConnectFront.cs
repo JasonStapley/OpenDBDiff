@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
-using OpenDBDiff.SqlServer.Ui.Util;
 using OpenDBDiff.Abstractions.Ui;
+using OpenDBDiff.SqlServer.Schema.Connections;
+using OpenDBDiff.SqlServer.Ui.Util;
 using System;
 using System.Windows.Forms;
 
@@ -8,8 +9,19 @@ namespace OpenDBDiff.SqlServer.Ui
 {
     public partial class SqlServerConnectFront : UserControl, IFront
     {
+        private static readonly SqlServerAuthenticationMode[] AuthenticationModes =
+        {
+            SqlServerAuthenticationMode.Windows,
+            SqlServerAuthenticationMode.SqlServer,
+            SqlServerAuthenticationMode.ActiveDirectoryInteractive,
+            SqlServerAuthenticationMode.ActiveDirectoryIntegrated,
+            SqlServerAuthenticationMode.ActiveDirectoryPassword,
+            SqlServerAuthenticationMode.ActiveDirectoryDefault
+        };
+
         private Boolean isDatabaseFilled = false;
         private Boolean isServerFilled = false;
+        private ToolTip authenticationToolTip;
 
         private delegate void clearCombo();
 
@@ -18,28 +30,97 @@ namespace OpenDBDiff.SqlServer.Ui
         public SqlServerConnectFront()
         {
             InitializeComponent();
+            cboAuthentication.Items.Clear();
+            cboAuthentication.Items.AddRange(new object[]
+            {
+                "Windows Authentication",
+                "SQL Server Authentication",
+                "Active Directory Interactive",
+                "Active Directory Integrated",
+                "Active Directory Password",
+                "Active Directory Default"
+            });
+            authenticationToolTip = new ToolTip();
+            authenticationToolTip.SetToolTip(cboAuthentication,
+                "Windows and SQL Server authentication are unchanged.\r\n" +
+                "Active Directory Interactive signs in through the browser and supports MFA.\r\n" +
+                "Active Directory Integrated uses the domain account (not the same as Windows authentication).\r\n" +
+                "Active Directory Password is the deprecated Entra username and password flow.\r\n" +
+                "Active Directory Default uses Azure CLI, Visual Studio, environment or managed identity credentials.");
+            authenticationToolTip.SetToolTip(txtUsername,
+                "SQL login, or a Microsoft Entra user such as user@contoso.com.\r\n" +
+                "For Active Directory Interactive this is an optional sign-in hint, not a password.");
+            authenticationToolTip.SetToolTip(txtTenantId,
+                "Optional Entra tenant id or domain, for example contoso.onmicrosoft.com.\r\n" +
+                "Leave this blank to use the tenant the server publishes. It applies to the Active Directory modes.");
+            authenticationToolTip.SetToolTip(txtPassword,
+                "SQL Server password, or the Entra password for Active Directory Password.\r\n" +
+                "Interactive sign-in does not use this box.");
+            // Index 1 is SQL Server authentication, the same initial selection as before.
+            // The project handler then selects Windows authentication for a new comparison.
             cboAuthentication.SelectedIndex = 1;
         }
 
         private void cboAuthentication_SelectedIndexChanged(object sender, EventArgs e)
         {
-            txtUsername.Enabled = cboAuthentication.SelectedIndex == 1;
-            txtPassword.Enabled = cboAuthentication.SelectedIndex == 1;
+            UpdateAuthenticationFields();
             isDatabaseFilled = false;
             ClearDatabase();
         }
 
+        private void UpdateAuthenticationFields()
+        {
+            SqlServerAuthenticationMode mode = AuthenticationMode;
+            bool sqlLogin = mode == SqlServerAuthenticationMode.SqlServer;
+            bool entraPassword = mode == SqlServerAuthenticationMode.ActiveDirectoryPassword;
+            bool interactive = mode == SqlServerAuthenticationMode.ActiveDirectoryInteractive;
+            bool adDefault = mode == SqlServerAuthenticationMode.ActiveDirectoryDefault;
+            txtUsername.Enabled = sqlLogin || entraPassword || interactive || adDefault;
+            txtPassword.Enabled = sqlLogin || entraPassword;
+            txtTenantId.Enabled = SqlServerConnectionSettings.IsEntra(mode);
+        }
+
         public string ErrorConnection { get; private set; }
+
+        public SqlServerAuthenticationMode AuthenticationMode
+        {
+            get
+            {
+                int index = cboAuthentication.SelectedIndex;
+                if (index < 0 || index >= AuthenticationModes.Length)
+                    return SqlServerAuthenticationMode.SqlServer;
+                return AuthenticationModes[index];
+            }
+            set
+            {
+                int index = 1;
+                for (int i = 0; i < AuthenticationModes.Length; i++)
+                {
+                    if (AuthenticationModes[i] == value)
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+
+                if (cboAuthentication.SelectedIndex != index)
+                    cboAuthentication.SelectedIndex = index;
+                else
+                    UpdateAuthenticationFields();
+            }
+        }
 
         public bool UseWindowsAuthentication
         {
             get
             {
-                return cboAuthentication.SelectedIndex == 0;
+                return AuthenticationMode == SqlServerAuthenticationMode.Windows;
             }
             set
             {
-                cboAuthentication.SelectedIndex = (value ? 0 : 1);
+                AuthenticationMode = value
+                    ? SqlServerAuthenticationMode.Windows
+                    : SqlServerAuthenticationMode.SqlServer;
             }
         }
 
@@ -61,6 +142,12 @@ namespace OpenDBDiff.SqlServer.Ui
             set { txtPassword.Text = value; }
         }
 
+        public string TenantId
+        {
+            get { return txtTenantId.Text; }
+            set { txtTenantId.Text = value; }
+        }
+
         public override string Text
         {
             get { return lblName.Text; }
@@ -77,9 +164,8 @@ namespace OpenDBDiff.SqlServer.Ui
         {
             try
             {
-                using (SqlConnection connection = new SqlConnection())
+                using (SqlConnection connection = SqlConnections.Create(this.ConnectionString))
                 {
-                    connection.ConnectionString = this.ConnectionString;
                     connection.Open();
                     connection.Close();
                     return true;
@@ -92,86 +178,50 @@ namespace OpenDBDiff.SqlServer.Ui
             }
         }
 
-        private string BuildConnectionString(string server, string database)
+        private SqlServerConnectionSettings CurrentSettings(string database)
         {
-            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder();
-            builder.DataSource = server.Trim();
-
-            // if database is ommitted the connection will be established to the default database for the user
-            if (!string.IsNullOrEmpty(database))
-                builder.InitialCatalog = database.Trim();
-
-            builder.IntegratedSecurity = true;
-            builder.TrustServerCertificate = true;
-            return builder.ConnectionString;
-        }
-
-        private string BuildConnectionString(string server, string database, string username, string password)
-        {
-            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(BuildConnectionString(server, database));
-
-            builder.IntegratedSecurity = false;
-            builder.UserID = username;
-            builder.Password = password;
-            return builder.ConnectionString;
+            return new SqlServerConnectionSettings
+            {
+                Server = cboServer.Text,
+                Database = database,
+                Authentication = AuthenticationMode,
+                UserName = txtUsername.Text,
+                Password = txtPassword.Text,
+                TenantId = txtTenantId.Text
+            };
         }
 
         public string ConnectionStringToDefaultDatabase
         {
-            get
-            {
-                if (cboAuthentication.SelectedIndex == 1)
-                    return BuildConnectionString(cboServer.Text, null, txtUsername.Text, txtPassword.Text);
-                else
-                    return BuildConnectionString(cboServer.Text, null);
-            }
+            get { return CurrentSettings(null).ToConnectionString(); }
         }
 
         public string ConnectionStringToMasterDatabase
         {
-            get
-            {
-                if (cboAuthentication.SelectedIndex == 1)
-                    return BuildConnectionString(cboServer.Text, "master", txtUsername.Text, txtPassword.Text);
-                else
-                    return BuildConnectionString(cboServer.Text, "master");
-            }
+            get { return CurrentSettings("master").ToConnectionString(); }
         }
 
         public string ConnectionString
         {
-            get
-            {
-                if (cboAuthentication.SelectedIndex == 1)
-                    return BuildConnectionString(cboServer.Text, cboDatabase.Text, txtUsername.Text, txtPassword.Text);
-                else
-                    return BuildConnectionString(cboServer.Text, cboDatabase.Text);
-            }
+            get { return CurrentSettings(cboDatabase.Text).ToConnectionString(); }
             set
             {
                 if (!String.IsNullOrWhiteSpace(value))
                 {
-                    var builder = new SqlConnectionStringBuilder(value);
-
-                    ServerName = builder.DataSource;
-                    UseWindowsAuthentication = builder.IntegratedSecurity;
-                    if (UseWindowsAuthentication)
-                    {
-                        UserName = "";
-                        Password = "";
-                    }
-                    else
-                    {
-                        UserName = builder.UserID;
-                        Password = builder.Password;
-                    }
-                    DatabaseName = builder.InitialCatalog;
+                    SqlServerConnectionSettings settings = SqlServerConnectionSettings.Parse(value);
+                    ServerName = settings.Server;
+                    AuthenticationMode = settings.Authentication;
+                    UserName = settings.UserName ?? "";
+                    Password = settings.Password ?? "";
+                    TenantId = settings.TenantId ?? "";
+                    DatabaseName = settings.Database ?? "";
                 }
                 else
                 {
                     cboAuthentication.SelectedIndex = 1;
                     UserName = "";
                     Password = "";
+                    TenantId = "";
                     ServerName = "(local)";
                     DatabaseName = "";
                 }
@@ -191,7 +241,16 @@ namespace OpenDBDiff.SqlServer.Ui
             if (TestConnection())
                 MessageBox.Show(this, "Test successful!", "Test", MessageBoxButtons.OK, MessageBoxIcon.Information);
             else
-                MessageBox.Show(this, "Test failed!\r\n" + ErrorConnection, "Test", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "Test failed!\r\n" + ErrorConnection + EntraFailureHint(), "Test", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        private string EntraFailureHint()
+        {
+            if (!SqlServerConnectionSettings.IsEntra(AuthenticationMode))
+                return "";
+            return "\r\n\r\nFor Azure SQL, type the database name if the list stays empty. " +
+                "A contained Entra user often cannot open master, and sys.databases in a user database returns only that database. " +
+                "Active Directory Interactive opens a browser window; the connection waits two minutes so MFA can finish.";
         }
 
         private void AddComboItem(string item)
@@ -222,7 +281,7 @@ namespace OpenDBDiff.SqlServer.Ui
             {
                 String connectionString = ConnectionStringToDefaultDatabase;
                 ClearDatabase();
-                using (SqlConnection conn = new SqlConnection(connectionString))
+                using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     conn.Open();
                     using (SqlCommand command = new SqlCommand("SELECT name,database_id FROM sys.databases ORDER BY Name", conn))
@@ -252,6 +311,12 @@ namespace OpenDBDiff.SqlServer.Ui
         }
 
         private void txtPassword_TextChanged(object sender, EventArgs e)
+        {
+            isDatabaseFilled = false;
+            ClearDatabase();
+        }
+
+        private void txtTenantId_TextChanged(object sender, EventArgs e)
         {
             isDatabaseFilled = false;
             ClearDatabase();
@@ -289,7 +354,7 @@ namespace OpenDBDiff.SqlServer.Ui
             {
                 this.Cursor = Cursors.Default;
                 cboDatabase.Items.Clear();
-                MessageBox.Show(this, ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, ex.Message + EntraFailureHint(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -312,9 +377,10 @@ namespace OpenDBDiff.SqlServer.Ui
             var clone = new SqlServerConnectFront
             {
                 ServerName = this.ServerName,
-                UseWindowsAuthentication = this.UseWindowsAuthentication,
+                AuthenticationMode = this.AuthenticationMode,
                 UserName = this.UserName,
                 Password = this.Password,
+                TenantId = this.TenantId,
                 DatabaseName = this.DatabaseName
             };
 
@@ -331,9 +397,10 @@ namespace OpenDBDiff.SqlServer.Ui
             {
                 this.ServerName = sql.ServerName;
                 this.DatabaseName = sql.DatabaseName;
-                this.UseWindowsAuthentication = sql.UseWindowsAuthentication;
+                this.AuthenticationMode = sql.AuthenticationMode;
                 this.UserName = sql.UserName;
                 this.Password = sql.Password;
+                this.TenantId = sql.TenantId;
             }
         }
     }

@@ -7,6 +7,7 @@ using System.Data;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff
 {
@@ -43,7 +44,7 @@ namespace OpenDBDiff
         private static string execute(string script, string connectionString)
         {
             string result = string.Empty;
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using (SqlConnection connection = SqlConnections.Create(connectionString))
             {
                 try
                 {
@@ -68,7 +69,7 @@ namespace OpenDBDiff
             DataTable data = new DataTable();
             try
             {
-                using (SqlConnection connection = new SqlConnection(connectionString))
+                using (SqlConnection connection = SqlConnections.Create(connectionString))
                 {
                     SqlCommand command = new SqlCommand();
                     command.Connection = connection;
@@ -92,7 +93,7 @@ namespace OpenDBDiff
         public static string alter(ISchemaBase target, string connectionString)
         {
             var db = target.RootParent as IDatabase;
-            using (SqlConnection connection = new SqlConnection(connectionString))
+            using (SqlConnection connection = SqlConnections.Create(connectionString))
             {
                 if (db != null && DialogResult.Yes != MessageBox.Show(String.Format("Alter {0} {1} in {2}..{3}?\n(WARNING: No automatic backup is made!)",
                         target.ObjectType,
@@ -150,7 +151,7 @@ namespace OpenDBDiff
 
         public static bool CommitTable(DataTable table, string tableFullName, string ConnectionString)
         {
-            using (SqlConnection connection = new SqlConnection(ConnectionString))
+            using (SqlConnection connection = SqlConnections.Create(ConnectionString))
             {
                 SqlCommand command = new SqlCommand("SELECT * FROM " + tableFullName, connection);
                 SqlDataAdapter da = new SqlDataAdapter(command);

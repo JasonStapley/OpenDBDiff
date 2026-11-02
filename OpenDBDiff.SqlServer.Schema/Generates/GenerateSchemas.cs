@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using OpenDBDiff.SqlServer.Schema.Model;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -21,7 +22,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
         {
             if (database.Options.Ignore.FilterSchema)
             {
-                using (SqlConnection conn = new SqlConnection(connectioString))
+                using (SqlConnection conn = SqlConnections.Create(connectioString))
                 {
                     using (SqlCommand command = new SqlCommand(GetSQL(), conn))
                     {

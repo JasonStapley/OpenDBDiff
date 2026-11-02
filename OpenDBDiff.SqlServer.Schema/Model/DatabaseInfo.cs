@@ -25,7 +25,12 @@ namespace OpenDBDiff.SqlServer.Schema.Model
             Standard = 2,
             Enterprise = 3,
             Express = 4,
-            Azure = 5
+
+            // SERVERPROPERTY('EngineEdition') = 5. Azure SQL Database (no user filegroups, no CLR).
+            Azure = 5,
+
+            // SERVERPROPERTY('EngineEdition') = 8. Nearly full SQL Server surface; not the v10 Azure path.
+            AzureManagedInstance = 8
         }
 
         private float versionNumber;
@@ -42,6 +47,29 @@ namespace OpenDBDiff.SqlServer.Schema.Model
         public SQLServerVersion Version { get; private set; }
 
         public SQLServerEdition Edition { get; private set; }
+
+        /// <summary>
+        /// Azure SQL Database (EngineEdition 5), including the historical 10.25 product version.
+        /// Managed Instance is not included: it supports filegroups, CLR, partitions and full text.
+        /// </summary>
+        public bool IsAzureSqlDatabase
+        {
+            get
+            {
+                return Edition == SQLServerEdition.Azure
+                    || Version == SQLServerVersion.SQLServerAzure10;
+            }
+        }
+
+        public bool IsAzureManagedInstance
+        {
+            get { return Edition == SQLServerEdition.AzureManagedInstance; }
+        }
+
+        public bool IsAzureFamily
+        {
+            get { return IsAzureSqlDatabase || IsAzureManagedInstance; }
+        }
 
         public string Collation { get; set; }
 

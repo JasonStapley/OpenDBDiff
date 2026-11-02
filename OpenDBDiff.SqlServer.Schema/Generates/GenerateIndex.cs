@@ -4,6 +4,7 @@ using OpenDBDiff.Abstractions.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Generates.SQLCommands;
 using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -24,7 +25,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             string type;
             ISchemaBase parent = null;
             root.RaiseOnReading(new ProgressEventArgs("Reading Index...", Constants.READING_INDEXES));
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(IndexSQLCommand.Get(database.Info.Version, database.Info.Edition), conn))
                 {

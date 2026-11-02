@@ -14,9 +14,32 @@ namespace OpenDBDiff.SqlServer.Schema.Generates.SQLCommands
                 case DatabaseInfo.SQLServerVersion.SQLServer2005:
                     return Get2005();
 
+                case DatabaseInfo.SQLServerVersion.SQLServerAzure10:
+                    return GetAzure();
+
                 default:
+                    if (edition == DatabaseInfo.SQLServerEdition.Azure)
+                        return GetAzure();
                     return Get2008();
             }
+        }
+
+        /// <summary>
+        /// Alias types are supported on Azure SQL Database. CLR types and the assembly
+        /// catalog views are not, so this query never touches them.
+        /// </summary>
+        private static string GetAzure()
+        {
+            string sql = "SELECT '' AS assembly_name, CAST(0 AS int) AS assembly_id, '' AS assembly_class, T.max_length, S2.name as defaultowner, O2.name as defaultname, S1.name as ruleowner, O.name as rulename, ISNULL(T2.Name,'') AS basetypename, S.Name AS Owner, T.Name, CAST(0 AS bit) AS is_assembly_type, T.user_type_id AS tid, T.is_nullable, T.precision, T.scale ";
+            sql += "FROM sys.types T ";
+            sql += "INNER JOIN sys.schemas S ON S.schema_id = T.schema_id ";
+            sql += "LEFT JOIN sys.types T2 ON T2.user_type_id = T.system_type_id ";
+            sql += "LEFT JOIN sys.objects O ON O.type = 'R' and O.object_id = T.rule_object_id ";
+            sql += "LEFT JOIN sys.schemas S1 ON S1.schema_id = O.schema_id ";
+            sql += "LEFT JOIN sys.objects O2 ON O2.type = 'D' and O2.object_id = T.default_object_id ";
+            sql += "LEFT JOIN sys.schemas S2 ON S2.schema_id = O2.schema_id ";
+            sql += "WHERE T.is_user_defined = 1 AND T.is_table_type = 0 AND T.is_assembly_type = 0 ORDER BY T.Name";
+            return sql;
         }
 
         public static string Get2008()

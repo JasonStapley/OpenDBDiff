@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
 using System;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -33,7 +34,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
         {
             if (database.Options.Ignore.FilterAssemblies)
             {
-                using (SqlConnection conn = new SqlConnection(connectionString))
+                using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     using (SqlCommand command = new SqlCommand(GetSQLFiles(), conn))
                     {
@@ -60,7 +61,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             int lastViewId = 0;
             if (database.Options.Ignore.FilterAssemblies)
             {
-                using (SqlConnection conn = new SqlConnection(connectionString))
+                using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     using (SqlCommand command = new SqlCommand(GetSQL(), conn))
                     {

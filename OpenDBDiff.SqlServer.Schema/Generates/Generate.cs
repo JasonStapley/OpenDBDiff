@@ -3,6 +3,7 @@ using OpenDBDiff.Abstractions.Schema.Errors;
 using OpenDBDiff.Abstractions.Schema.Events;
 using OpenDBDiff.Abstractions.Schema.Misc;
 using OpenDBDiff.SqlServer.Schema.Compare;
+using OpenDBDiff.SqlServer.Schema.Connections;
 using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Options;
@@ -34,7 +35,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             get
             {
                 string name;
-                using (var conn = new SqlConnection(ConnectionString))
+                using (var conn = SqlConnections.Create(ConnectionString))
                 {
                     name = conn.Database;
                 }
@@ -85,18 +86,18 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
                 {
                     try
                     {*/
-            (new GenerateRules(this)).Fill(databaseSchema, ConnectionString);
+            ReadAzureTolerant(databaseSchema, "rules", delegate { (new GenerateRules(this)).Fill(databaseSchema, ConnectionString); });
             (new GenerateTables(this)).Fill(databaseSchema, ConnectionString, messages);
             (new GenerateViews(this)).Fill(databaseSchema, ConnectionString, messages);
 
             if (Options.Ignore.FilterIndex)
             {
-                (new GenerateIndex(this)).Fill(databaseSchema, ConnectionString);
-                (new GenerateFullTextIndex(this)).Fill(databaseSchema, ConnectionString);
+                ReadAzureTolerant(databaseSchema, "indexes", delegate { (new GenerateIndex(this)).Fill(databaseSchema, ConnectionString); });
+                ReadAzureTolerant(databaseSchema, "full-text indexes", delegate { (new GenerateFullTextIndex(this)).Fill(databaseSchema, ConnectionString); });
             }
             (new GenerateUserDataTypes(this)).Fill(databaseSchema, ConnectionString, messages);
-            (new GenerateXMLSchemas(this)).Fill(databaseSchema, ConnectionString);
-            (new GenerateSchemas(this)).Fill(databaseSchema, ConnectionString);
+            ReadAzureTolerant(databaseSchema, "XML schemas", delegate { (new GenerateXMLSchemas(this)).Fill(databaseSchema, ConnectionString); });
+            ReadAzureTolerant(databaseSchema, "schemas", delegate { (new GenerateSchemas(this)).Fill(databaseSchema, ConnectionString); });
             /*}
                     catch (Exception ex)
                     {
@@ -108,22 +109,23 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
                     try
                     {*/
 
-            //not supported in azure yet
-            if (databaseSchema.Info.Version != DatabaseInfo.SQLServerVersion.SQLServerAzure10)
+            // Azure SQL Database has no user filegroups, so partition schemes and filegroups
+            // cannot be scripted. Managed Instance supports them and is not on this path.
+            if (!databaseSchema.Info.IsAzureSqlDatabase)
             {
-                (new GeneratePartitionFunctions(this)).Fill(databaseSchema, ConnectionString);
-                (new GeneratePartitionScheme(this)).Fill(databaseSchema, ConnectionString);
-                (new GenerateFileGroups(this)).Fill(databaseSchema, ConnectionString);
+                ReadAzureTolerant(databaseSchema, "partition functions", delegate { (new GeneratePartitionFunctions(this)).Fill(databaseSchema, ConnectionString); });
+                ReadAzureTolerant(databaseSchema, "partition schemes", delegate { (new GeneratePartitionScheme(this)).Fill(databaseSchema, ConnectionString); });
+                ReadAzureTolerant(databaseSchema, "filegroups", delegate { (new GenerateFileGroups(this)).Fill(databaseSchema, ConnectionString); });
             }
 
-            (new GenerateDDLTriggers(this)).Fill(databaseSchema, ConnectionString);
-            (new GenerateSynonyms(this)).Fill(databaseSchema, ConnectionString);
+            ReadAzureTolerant(databaseSchema, "DDL triggers", delegate { (new GenerateDDLTriggers(this)).Fill(databaseSchema, ConnectionString); });
+            ReadAzureTolerant(databaseSchema, "synonyms", delegate { (new GenerateSynonyms(this)).Fill(databaseSchema, ConnectionString); });
 
-            //not supported in azure yet
-            if (databaseSchema.Info.Version != DatabaseInfo.SQLServerVersion.SQLServerAzure10)
+            // CLR assemblies and full-text catalogs (filegroup path) are not available on Azure SQL Database.
+            if (!databaseSchema.Info.IsAzureSqlDatabase)
             {
-                (new GenerateAssemblies(this)).Fill(databaseSchema, ConnectionString);
-                (new GenerateFullText(this)).Fill(databaseSchema, ConnectionString);
+                ReadAzureTolerant(databaseSchema, "assemblies", delegate { (new GenerateAssemblies(this)).Fill(databaseSchema, ConnectionString); });
+                ReadAzureTolerant(databaseSchema, "full-text catalogs", delegate { (new GenerateFullText(this)).Fill(databaseSchema, ConnectionString); });
             }
             /*}
                     catch (Exception ex)
@@ -135,11 +137,11 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
                 {
                     try
                     {*/
-            (new GenerateStoredProcedures(this)).Fill(databaseSchema, ConnectionString);
-            (new GenerateFunctions(this)).Fill(databaseSchema, ConnectionString);
+            ReadAzureTolerant(databaseSchema, "stored procedures", delegate { (new GenerateStoredProcedures(this)).Fill(databaseSchema, ConnectionString); });
+            ReadAzureTolerant(databaseSchema, "functions", delegate { (new GenerateFunctions(this)).Fill(databaseSchema, ConnectionString); });
             (new GenerateTriggers(this)).Fill(databaseSchema, ConnectionString, messages);
-            (new GenerateTextObjects(this)).Fill(databaseSchema, ConnectionString);
-            (new GenerateUsers(this)).Fill(databaseSchema, ConnectionString);
+            ReadAzureTolerant(databaseSchema, "object definitions", delegate { (new GenerateTextObjects(this)).Fill(databaseSchema, ConnectionString); });
+            ReadAzureTolerant(databaseSchema, "users", delegate { (new GenerateUsers(this)).Fill(databaseSchema, ConnectionString); });
             /*}
                     catch (Exception ex)
                     {
@@ -156,12 +158,28 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             {
                 /*Las propiedades extendidas deben ir despues de haber capturado el resto de los objetos de la base*/
                 (new GenerateExtendedProperties(this)).Fill(databaseSchema, ConnectionString, messages);
-                (new GeneratePermissions(this)).Fill(databaseSchema, ConnectionString);
+                ReadAzureTolerant(databaseSchema, "permissions", delegate { (new GeneratePermissions(this)).Fill(databaseSchema, ConnectionString); });
                 databaseSchema.BuildDependency();
                 return databaseSchema;
             }
             else
                 throw new SchemaException(error);
+        }
+
+        private void ReadAzureTolerant(Database database, string description, Action read)
+        {
+            try
+            {
+                read();
+            }
+            catch (SqlException ex) when (AzureSchemaCompatibility.ShouldSkip(database.Info, ex))
+            {
+                messages.Add(new MessageLog(
+                    "Skipped " + description + " because this Azure SQL offering rejected the query. " + ex.Message,
+                    ex.ToString(),
+                    MessageLog.LogType.Warning));
+                RaiseOnReading(new ProgressEventArgs("Skipped " + description + " (not supported on this Azure SQL offering).", -1));
+            }
         }
 
         private void tables_OnTableProgress(object sender, ProgressEventArgs e)

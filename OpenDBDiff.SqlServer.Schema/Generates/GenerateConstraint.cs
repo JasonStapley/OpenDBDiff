@@ -4,6 +4,7 @@ using OpenDBDiff.Abstractions.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Generates.SQLCommands;
 using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -22,7 +23,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             int parentId = 0;
             ISchemaBase table = null;
 
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(ConstraintSQLCommand.GetCheck(database.Info.Version), conn))
                 {
@@ -81,7 +82,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             int parentId = 0;
             Table table = null;
 
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(GetSQLForeignKey(), conn))
                 {
@@ -143,7 +144,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             bool change = false;
             ISchemaBase table = null;
 
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(ConstraintSQLCommand.GetUniqueKey(database.Info.Version, database.Info.Edition), conn))
                 {
@@ -230,7 +231,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             bool change = false;
             ISchemaBase table = null;
 
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(ConstraintSQLCommand.GetPrimaryKey(database.Info.Version, null), conn))
                 {

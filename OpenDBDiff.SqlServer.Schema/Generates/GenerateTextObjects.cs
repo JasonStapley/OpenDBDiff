@@ -5,6 +5,7 @@ using OpenDBDiff.SqlServer.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Options;
 using System;
 using System.Text.RegularExpressions;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -41,7 +42,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
                 if ((database.Options.Ignore.FilterStoredProcedure) || (database.Options.Ignore.FilterView) || (database.Options.Ignore.FilterFunction) || (database.Options.Ignore.FilterTrigger))
                 {
                     root.RaiseOnReading(new ProgressEventArgs("Reading Text Objects...", Constants.READING_TEXTOBJECTS));
-                    using (SqlConnection conn = new SqlConnection(connectionString))
+                    using (SqlConnection conn = SqlConnections.Create(connectionString))
                     {
                         using (SqlCommand command = new SqlCommand(GetSQL(database.Options), conn))
                         {

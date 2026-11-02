@@ -3,6 +3,7 @@ using OpenDBDiff.Abstractions.Schema.Events;
 using OpenDBDiff.SqlServer.Schema.Generates.SQLCommands;
 using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -17,14 +18,15 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
 
         public void Fill(Database database, string connectionString)
         {
-            //not supported in azure yet
-            if (database.Info.Version == DatabaseInfo.SQLServerVersion.SQLServerAzure10) return;
+            // The reader joins sys.data_spaces for the filegroup. Azure SQL Database has no
+            // user filegroups, so full-text indexes are left unread there. Managed Instance is read.
+            if (database.Info.IsAzureSqlDatabase) return;
 
             int parentId = 0;
             bool change = false;
             Table parent = null;
             root.RaiseOnReading(new ProgressEventArgs("Reading FullText Index...", Constants.READING_INDEXES));
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(FullTextIndexSQLCommand.Get(database.Info.Version), conn))
                 {
