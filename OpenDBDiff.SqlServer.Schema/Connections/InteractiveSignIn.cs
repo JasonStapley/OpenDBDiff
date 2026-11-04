@@ -4,6 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenDBDiff.SqlServer.Schema.Connections
@@ -17,11 +18,12 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
     /// </summary>
     internal static class InteractiveSignIn
     {
-        internal const string Marker = "interactive-browser-1";
+        internal const string Marker = "interactive-browser-2";
 
-        // SqlClient's first-party public client. Its registered redirect is the native-client URI.
+        // SqlClient's first-party public client. The system browser uses a loopback redirect.
         private const string ClientId = "2fd908ad-0664-4344-b9be-cd3e8b574c38";
-        private const string NativeRedirect = "https://login.microsoftonline.com/common/oauth2/nativeclient";
+        private const string LoopbackRedirect = "http://localhost";
+        internal static readonly TimeSpan SignInTimeout = TimeSpan.FromMinutes(3);
 
         private static readonly ConcurrentDictionary<string, IPublicClientApplication> Applications =
             new ConcurrentDictionary<string, IPublicClientApplication>(StringComparer.OrdinalIgnoreCase);
@@ -78,12 +80,29 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
                 + " flow=" + lastFlow;
         }
 
-        internal static async Task<SqlAuthenticationToken> AcquireAsync(
+        internal static bool IsNetFrameworkDescription(string description)
+        {
+            return description != null
+                && description.IndexOf(".NET Framework", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        internal static Task<SqlAuthenticationToken> AcquireAsync(
             SqlAuthenticationParameters parameters,
             ActiveDirectoryAuthenticationProvider driverProvider)
         {
-            IntPtr handle = capturedHandle;
-            if (handle == IntPtr.Zero)
+            // Leave the caller's thread immediately. SqlClient opens the connection with a
+            // blocking wait; if that wait is on the WinForms UI thread, an interactive prompt
+            // that also needs that thread never appears.
+            return Task.Run(() => AcquireAwayFromUiThreadAsync(parameters, driverProvider));
+        }
+
+        private static async Task<SqlAuthenticationToken> AcquireAwayFromUiThreadAsync(
+            SqlAuthenticationParameters parameters,
+            ActiveDirectoryAuthenticationProvider driverProvider)
+        {
+            bool systemBrowser = IsNetFrameworkDescription(RuntimeInformation.FrameworkDescription)
+                || capturedHandle != IntPtr.Zero;
+            if (!systemBrowser)
             {
                 lastFlow = "driver-console";
                 try
@@ -96,51 +115,34 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
                 }
             }
 
-            try
+            lastFlow = "msal-system-browser";
+            using (var timeout = new CancellationTokenSource(SignInTimeout))
             {
-                lastFlow = "msal-embedded";
-                AuthenticationResult result = await AcquireWithMsalAsync(parameters, handle, true).ConfigureAwait(false);
-                return new SqlAuthenticationToken(result.AccessToken, result.ExpiresOn);
-            }
-            catch (Exception embeddedFailure)
-            {
-                if (!ShouldRetryWithSystemBrowser(embeddedFailure))
-                    throw new InvalidOperationException(embeddedFailure.Message + "\r\n\r\n" + Diagnostics(), embeddedFailure);
-
                 try
                 {
-                    lastFlow = "msal-system-browser";
-                    AuthenticationResult result = await AcquireWithMsalAsync(parameters, handle, false).ConfigureAwait(false);
+                    AuthenticationResult result = await AcquireWithMsalAsync(parameters, timeout.Token).ConfigureAwait(false);
                     return new SqlAuthenticationToken(result.AccessToken, result.ExpiresOn);
                 }
-                catch (Exception browserFailure)
+                catch (Exception ex) when (timeout.IsCancellationRequested)
                 {
-                    throw new InvalidOperationException(
-                        embeddedFailure.Message
-                        + "\r\nSystem-browser retry: " + browserFailure.Message
-                        + "\r\n\r\n" + Diagnostics(),
-                        browserFailure);
+                    throw new TimeoutException(
+                        "Sign-in timed out after 3 minutes. Finish the sign-in in the browser, then click Test again.\r\n\r\n"
+                        + Diagnostics(),
+                        ex);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(ex.Message + "\r\n\r\n" + Diagnostics(), ex);
                 }
             }
-        }
-
-        private static bool ShouldRetryWithSystemBrowser(Exception failure)
-        {
-            string text = failure == null ? "" : failure.ToString();
-            return text.IndexOf("WebView", StringComparison.OrdinalIgnoreCase) >= 0
-                || text.IndexOf("window_handle", StringComparison.OrdinalIgnoreCase) >= 0
-                || text.IndexOf("broker", StringComparison.OrdinalIgnoreCase) >= 0
-                || text.IndexOf("WAM", StringComparison.Ordinal) >= 0;
         }
 
         private static async Task<AuthenticationResult> AcquireWithMsalAsync(
             SqlAuthenticationParameters parameters,
-            IntPtr handle,
-            bool embeddedWebView)
+            CancellationToken cancellation)
         {
             string authority = RewriteAuthority(parameters);
-            string cacheKey = authority + (embeddedWebView ? "|embedded" : "|browser");
-            IPublicClientApplication app = Applications.GetOrAdd(cacheKey, delegate (string key) { return CreateApplication(authority, embeddedWebView); });
+            IPublicClientApplication app = Applications.GetOrAdd(authority, CreateSystemBrowserApplication);
             string[] scopes = new[] { ScopeFor(parameters.Resource) };
             string loginHint = parameters.UserId;
 
@@ -149,31 +151,32 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
             {
                 try
                 {
-                    return await app.AcquireTokenSilent(scopes, account).ExecuteAsync().ConfigureAwait(false);
+                    return await app.AcquireTokenSilent(scopes, account).ExecuteAsync(cancellation).ConfigureAwait(false);
                 }
                 catch (MsalUiRequiredException)
                 {
                 }
             }
 
+            // System browser. http://localhost is the loopback redirect MSAL listens on.
+            // The embedded web view is not used: opening it on the blocked UI thread never appears.
             AcquireTokenInteractiveParameterBuilder interactive = app.AcquireTokenInteractive(scopes)
-                .WithUseEmbeddedWebView(embeddedWebView)
-                .WithParentActivityOrWindow(handle);
+                .WithUseEmbeddedWebView(false);
+            if (capturedHandle != IntPtr.Zero)
+                interactive = interactive.WithParentActivityOrWindow(capturedHandle);
             if (!string.IsNullOrEmpty(loginHint))
                 interactive = interactive.WithLoginHint(loginHint);
-            return await interactive.ExecuteAsync().ConfigureAwait(false);
+            return await interactive.ExecuteAsync(cancellation).ConfigureAwait(false);
         }
 
-        private static IPublicClientApplication CreateApplication(string authority, bool embeddedWebView)
+        private static IPublicClientApplication CreateSystemBrowserApplication(string authority)
         {
-            // Do not call WithBroker. The Windows account broker is opt-in, and it is what
-            // raises 0xwindow_handle_required when no parent window is configured.
-            PublicClientApplicationBuilder builder = PublicClientApplicationBuilder
+            // Do not enable the Windows account broker. It is what raises 0xwindow_handle_required.
+            return PublicClientApplicationBuilder
                 .Create(ClientId)
-                .WithAuthority(authority);
-            if (embeddedWebView)
-                builder = builder.WithRedirectUri(NativeRedirect);
-            return builder.Build();
+                .WithAuthority(authority)
+                .WithRedirectUri(LoopbackRedirect)
+                .Build();
         }
 
         private static async Task<IAccount> FindAccountAsync(IPublicClientApplication app, string loginHint)

@@ -126,7 +126,7 @@ namespace OpenDBDiff.Tests.Connections
             Assert.IsTrue(EntraTenantHints.TryGet("tcp:contoso.database.windows.net,1433", out tenant));
             Assert.AreEqual("contoso.onmicrosoft.com", tenant);
             Assert.IsTrue(EntraAuthentication.IsTenantHintProviderInstalled);
-            StringAssert.Contains(SqlConnections.InteractiveDiagnostics(), "interactive-browser-1");
+            StringAssert.Contains(SqlConnections.InteractiveDiagnostics(), "interactive-browser-2");
             StringAssert.Contains(SqlConnections.InteractiveDiagnostics(), "registered=");
 
             SqlServerConnectionSettings roundTrip = SqlServerConnectionSettings.Parse(stored);
@@ -160,10 +160,19 @@ namespace OpenDBDiff.Tests.Connections
         {
             SqlConnections.CaptureInteractiveOwner(new IntPtr(0x1234), "unit test");
             string diagnostic = SqlConnections.InteractiveDiagnostics();
-            StringAssert.Contains(diagnostic, "interactive-browser-1");
+            StringAssert.Contains(diagnostic, "interactive-browser-2");
             StringAssert.Contains(diagnostic, "0x1234");
             StringAssert.Contains(diagnostic, "unit test");
             StringAssert.Contains(diagnostic, "process=");
+        }
+
+        [TestMethod]
+        public void NetFramework_UsesTheSystemBrowserSignInPath()
+        {
+            Assert.IsTrue(InteractiveSignIn.IsNetFrameworkDescription(".NET Framework 4.8.9310.0"));
+            Assert.IsFalse(InteractiveSignIn.IsNetFrameworkDescription(".NET 10.0.0"));
+            Assert.IsFalse(InteractiveSignIn.IsNetFrameworkDescription(null));
+            Assert.AreEqual(TimeSpan.FromMinutes(3), SqlConnections.InteractiveSignInTimeout);
         }
 
         [TestMethod]

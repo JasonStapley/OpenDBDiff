@@ -42,6 +42,11 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
         {
             return InteractiveSignIn.Diagnostics();
         }
+
+        public static TimeSpan InteractiveSignInTimeout
+        {
+            get { return InteractiveSignIn.SignInTimeout; }
+        }
     }
 
     internal static class EntraConnectionStrings
