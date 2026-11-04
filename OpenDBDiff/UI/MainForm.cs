@@ -8,6 +8,7 @@ using OpenDBDiff.Abstractions.Schema.Model;
 using OpenDBDiff.Abstractions.Ui;
 using OpenDBDiff.Extensions;
 using OpenDBDiff.Settings;
+using OpenDBDiff.SqlServer.Schema.Connections;
 using ScintillaNET;
 using System;
 using System.Collections.Generic;
@@ -46,6 +47,8 @@ namespace OpenDBDiff.UI
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            if (IsHandleCreated)
+                SqlConnections.CaptureInteractiveOwner(Handle, "MainForm.OnShown");
 
             // Restore after the form has its final (maximized) size, so the saved distance isn't clamped
             var distance = UiSettings.Load().SchemaSplitterDistance;

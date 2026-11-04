@@ -106,7 +106,7 @@ In either database panel:
 3. **Username:** the Entra user when the mode asks for it. For Azure DB it is only a hint in the browser prompt.
 4. **Tenant ID:** leave blank unless you need to override the server's tenant.
 5. **Database:** type the database name. On Azure SQL Database, `sys.databases` in a user database returns only that database, and a contained user often cannot open `master`, so the drop-down may list a single name or fail until you type one.
-6. **Test**, then compare as usual. Azure DB opens a browser window.
+6. **Test**, then compare as usual. On the WinForms app (net48, including 32-bit) the title changes to **Waiting for sign-in in your browser…** and the sign-in page opens in your browser (`http://localhost` redirect). The window stays responsive. Sign-in gives up after 3 minutes with an error instead of hanging. The .NET 10 command-line build, which has no form, still uses the driver's console prompt. A saved project stores `Authentication=Active Directory Interactive`. If sign-in fails, the message includes `interactive-browser-2`, the assembly version, `32-bit` or `64-bit`, `flow=msal-system-browser`, and `handle=0x...` or `handle=none`. A message without `interactive-browser-2` is from an older build.
 
 The same connection string works on the CLI (`--before` and `--after`). Examples:
 

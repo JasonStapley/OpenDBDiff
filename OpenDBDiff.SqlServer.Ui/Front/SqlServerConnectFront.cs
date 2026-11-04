@@ -3,6 +3,7 @@ using OpenDBDiff.Abstractions.Ui;
 using OpenDBDiff.SqlServer.Schema.Connections;
 using OpenDBDiff.SqlServer.Ui.Util;
 using System;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace OpenDBDiff.SqlServer.Ui
@@ -164,6 +165,11 @@ namespace OpenDBDiff.SqlServer.Ui
         {
             try
             {
+                // The Test button runs on the UI thread. Capture the owner handle here,
+                // before Open, so interactive sign-in does not have to query WinForms later.
+                if (SqlServerConnectionSettings.IsEntra(AuthenticationMode))
+                    RememberSignInWindow("Test button");
+
                 using (SqlConnection connection = SqlConnections.Create(this.ConnectionString))
                 {
                     connection.Open();
@@ -174,8 +180,27 @@ namespace OpenDBDiff.SqlServer.Ui
             catch (Exception ex)
             {
                 ErrorConnection = ex.Message;
+                if (SqlServerConnectionSettings.IsEntra(AuthenticationMode)
+                    && (ErrorConnection == null || ErrorConnection.IndexOf(InteractiveSignInMarker, StringComparison.Ordinal) < 0))
+                {
+                    ErrorConnection += "\r\n\r\n" + SqlConnections.InteractiveDiagnostics();
+                }
                 return false;
             }
+        }
+
+        private const string InteractiveSignInMarker = "interactive-browser-2";
+        private const string WaitingForBrowser = "Waiting for sign-in in your browser…";
+
+        private void RememberSignInWindow(string source)
+        {
+            IntPtr handle = IntPtr.Zero;
+            Form owner = FindForm();
+            if (owner != null && !owner.IsDisposed && owner.IsHandleCreated)
+                handle = owner.Handle;
+            else if (IsHandleCreated)
+                handle = Handle;
+            SqlConnections.CaptureInteractiveOwner(handle, source);
         }
 
         private SqlServerConnectionSettings CurrentSettings(string database)
@@ -238,7 +263,54 @@ namespace OpenDBDiff.SqlServer.Ui
 
         private void btnTest_Click(object sender, EventArgs e)
         {
-            if (TestConnection())
+            if (AuthenticationMode == SqlServerAuthenticationMode.ActiveDirectoryInteractive)
+            {
+                BeginInteractiveTest();
+                return;
+            }
+
+            ShowTestResult(TestConnection());
+        }
+
+        private async void BeginInteractiveTest()
+        {
+            string previousLabel = lblName.Text;
+            btnTest.Enabled = false;
+            lblName.Text = WaitingForBrowser;
+            Update();
+            RememberSignInWindow("Test button");
+            bool succeeded = false;
+            try
+            {
+                Task<bool> work = Task.Run(() => TestConnection());
+                Task finished = await Task.WhenAny(work, Task.Delay(SqlConnections.InteractiveSignInTimeout));
+                if (finished != work)
+                {
+                    ErrorConnection = "Sign-in timed out after 3 minutes. The browser sign-in did not finish."
+                        + "\r\n\r\n" + SqlConnections.InteractiveDiagnostics();
+                }
+                else
+                {
+                    succeeded = await work;
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorConnection = ex.Message;
+                succeeded = false;
+            }
+            finally
+            {
+                lblName.Text = previousLabel;
+                btnTest.Enabled = true;
+            }
+
+            ShowTestResult(succeeded);
+        }
+
+        private void ShowTestResult(bool succeeded)
+        {
+            if (succeeded)
                 MessageBox.Show(this, "Test successful!", "Test", MessageBoxButtons.OK, MessageBoxIcon.Information);
             else
                 MessageBox.Show(this, "Test failed!\r\n" + ErrorConnection + EntraFailureHint(), "Test", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -250,7 +322,7 @@ namespace OpenDBDiff.SqlServer.Ui
                 return "";
             return "\r\n\r\nFor Azure SQL, type the database name if the list stays empty. " +
                 "A contained Entra user often cannot open master, and sys.databases in a user database returns only that database. " +
-                "Azure DB opens a browser window; the connection waits two minutes so MFA can finish.";
+                "Azure DB opens your browser. This window stays usable and shows \"Waiting for sign-in in your browser…\" until you finish, or for 3 minutes.";
         }
 
         private void AddComboItem(string item)
@@ -281,6 +353,8 @@ namespace OpenDBDiff.SqlServer.Ui
             {
                 String connectionString = ConnectionStringToDefaultDatabase;
                 ClearDatabase();
+                if (SqlServerConnectionSettings.IsEntra(AuthenticationMode))
+                    RememberSignInWindow("Database list");
                 using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     conn.Open();
