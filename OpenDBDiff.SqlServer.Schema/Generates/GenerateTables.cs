@@ -11,6 +11,7 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 using Constraint = OpenDBDiff.SqlServer.Schema.Model.Constraint;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -230,7 +231,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             bool isTable = true;
             ISchemaBase item = null;
 
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(TableSQLCommand.GetTableDetail(database.Info.Version, database.Info.Edition), conn))
                 {

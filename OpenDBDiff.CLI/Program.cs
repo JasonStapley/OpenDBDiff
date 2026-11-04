@@ -1,6 +1,6 @@
 ﻿using CommandLine;
-using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using OpenDBDiff.SqlServer.Schema.Connections;
 using OpenDBDiff.Abstractions.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Generates;
 using OpenDBDiff.SqlServer.Schema.Model;
@@ -47,9 +47,8 @@ namespace OpenDBDiff.CLI
 
         private static bool TestConnection(string connectionString1)
         {
-            using (var connection = new SqlConnection())
+            using (var connection = SqlConnections.Create(connectionString1))
             {
-                connection.ConnectionString = connectionString1;
                 connection.Open();
                 connection.Close();
                 return true;

@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using OpenDBDiff.Abstractions.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Model;
 using System;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -46,7 +47,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
         {
             if (database.Options.Ignore.FilterPermissions)
             {
-                using (SqlConnection conn = new SqlConnection(connectionString))
+                using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     using (SqlCommand command = new SqlCommand(GetSQL(), conn))
                     {

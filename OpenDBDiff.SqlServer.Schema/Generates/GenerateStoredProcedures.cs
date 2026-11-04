@@ -3,6 +3,7 @@ using OpenDBDiff.Abstractions.Schema.Events;
 using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
 using System.Linq;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -50,7 +51,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
 
         private static void FillParameters(Database database, string connectionString)
         {
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(GetSQLParameters(), conn))
                 {
@@ -89,7 +90,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             if ((database.Options.Ignore.FilterStoredProcedure) || (database.Options.Ignore.FilterCLRStoredProcedure))
             {
                 root.RaiseOnReading(new ProgressEventArgs("Reading stored procedures...", Constants.READING_PROCEDURES));
-                using (SqlConnection conn = new SqlConnection(connectionString))
+                using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     using (SqlCommand command = new SqlCommand(GetSQL(database.Info.Version), conn))
                     {

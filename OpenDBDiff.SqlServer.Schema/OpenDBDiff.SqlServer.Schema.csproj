@@ -10,6 +10,7 @@
   <ItemGroup>
     <Using Remove="System.Net.Http" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
+    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.1.1" />
     <PackageReference Include="TSQL.Parser" Version="2.6.0" />
     <ProjectReference Include="..\OpenDBDiff.Abstractions.Schema\OpenDBDiff.Abstractions.Schema.csproj" />
   </ItemGroup>

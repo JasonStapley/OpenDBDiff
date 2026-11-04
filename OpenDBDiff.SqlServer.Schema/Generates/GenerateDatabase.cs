@@ -5,6 +5,7 @@ using OpenDBDiff.SqlServer.Schema.Model;
 using OpenDBDiff.SqlServer.Schema.Options;
 using System;
 using System.Globalization;
+using OpenDBDiff.SqlServer.Schema.Connections;
 #if DEBUG
 #endif
 
@@ -30,7 +31,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
         public DatabaseInfo Get(Database database)
         {
             DatabaseInfo item = new DatabaseInfo();
-            using (SqlConnection conn = new SqlConnection(connectioString))
+            using (SqlConnection conn = SqlConnections.Create(connectioString))
             {
                 using (SqlCommand command = new SqlCommand(DatabaseSQLCommand.GetVersion(database), conn))
                 {

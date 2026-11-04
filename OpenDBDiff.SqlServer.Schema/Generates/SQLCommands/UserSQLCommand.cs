@@ -21,8 +21,9 @@ namespace OpenDBDiff.SqlServer.Schema.Generates.SQLCommands
                 default:
                     if (edition == DatabaseInfo.SQLServerEdition.Azure)
                         return GetAzure();
-                    else
-                        return Get2008();
+                    if (edition == DatabaseInfo.SQLServerEdition.AzureManagedInstance)
+                        return GetManagedInstance();
+                    return Get2008();
             }
         }
 
@@ -41,9 +42,24 @@ namespace OpenDBDiff.SqlServer.Schema.Generates.SQLCommands
             var sql = new StringBuilder();
             //to get LoginName in Azure (asside for the current login) you would have to link to master and query sys.sysusers or sys.sql_users
             //the CASE test below will at least get you the Current login
-            sql.AppendLine("SELECT is_fixed_role, type, CASE WHEN suser_sid()=sid THEN suser_sname() ELSE '' END  AS Login,Name,principal_id, ISNULL(default_schema_name,'') AS default_schema_name ");
+            // E = EXTERNAL_USER, X = EXTERNAL_GROUP (CREATE USER ... FROM EXTERNAL PROVIDER).
+            // Other logins stay blank unless they are the current login; suser_sname(sid) cannot see them.
+            sql.AppendLine("SELECT is_fixed_role, type, CASE WHEN type IN ('E','X') THEN '' WHEN suser_sid()=sid THEN suser_sname() ELSE '' END  AS Login,Name,principal_id, ISNULL(default_schema_name,'') AS default_schema_name ");
             sql.AppendLine("FROM sys.database_principals ");
-            sql.AppendLine("WHERE type IN ('S','U','A','R') ");
+            sql.AppendLine("WHERE type IN ('S','U','A','R','E','X') ");
+            sql.AppendLine("ORDER BY Name");
+            return sql.ToString();
+        }
+
+        private static string GetManagedInstance()
+        {
+            var sql = new StringBuilder();
+            // Managed Instance resolves SQL logins like on-premises SQL Server.
+            // Entra principals still have no server login, so their Login column stays empty
+            // and the user is scripted FROM EXTERNAL PROVIDER.
+            sql.AppendLine("SELECT is_fixed_role, type, CASE WHEN type IN ('E','X') THEN '' ELSE ISNULL(suser_sname(sid),'') END AS Login,Name,principal_id, ISNULL(default_schema_name,'') AS default_schema_name ");
+            sql.AppendLine("FROM sys.database_principals ");
+            sql.AppendLine("WHERE type IN ('S','U','A','R','E','X') ");
             sql.AppendLine("ORDER BY Name");
             return sql.ToString();
         }

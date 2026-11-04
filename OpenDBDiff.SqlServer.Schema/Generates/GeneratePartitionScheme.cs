@@ -1,5 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 using OpenDBDiff.SqlServer.Schema.Model;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -23,7 +24,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             PartitionScheme item = null;
             if (database.Options.Ignore.FilterPartitionScheme)
             {
-                using (SqlConnection conn = new SqlConnection(connectioString))
+                using (SqlConnection conn = SqlConnections.Create(connectioString))
                 {
                     using (SqlCommand command = new SqlCommand(GetSQL(), conn))
                     {

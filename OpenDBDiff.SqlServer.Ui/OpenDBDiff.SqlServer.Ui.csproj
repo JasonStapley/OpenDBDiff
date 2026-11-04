@@ -13,6 +13,7 @@
     <Using Remove="System.Net.Http" />
     <Reference Include="System.Windows.Forms" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
+    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.1.1" />
     <PackageReference Include="System.Resources.Extensions" Version="10.0.13" />
     <ProjectReference Include="..\OpenDBDiff.Abstractions.Ui\OpenDBDiff.Abstractions.Ui.csproj" />
     <ProjectReference Include="..\OpenDBDiff.SqlServer.Schema\OpenDBDiff.SqlServer.Schema.csproj" />

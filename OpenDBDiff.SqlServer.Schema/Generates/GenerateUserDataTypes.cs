@@ -7,6 +7,7 @@ using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
 using System;
 using System.Collections.Generic;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -27,7 +28,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
         private static void FillColumnsDependencies(SchemaList<UserDataType, Database> types, string connectionString)
         {
             if (types == null) throw new ArgumentNullException("types");
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(GetSQLColumnsDependencies(), conn))
                 {
@@ -48,15 +49,12 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
 
         public void Fill(Database database, string connectionString, List<MessageLog> messages)
         {
-            //not supported in azure yet http://msdn.microsoft.com/en-us/library/ee336233.aspx
-            if (database.Info.Version == DatabaseInfo.SQLServerVersion.SQLServerAzure10) return;
-
             try
             {
                 if (database.Options.Ignore.FilterUserDataType)
                 {
                     root.RaiseOnReading(new ProgressEventArgs("Reading UDT...", Constants.READING_UDT));
-                    using (SqlConnection conn = new SqlConnection(connectionString))
+                    using (SqlConnection conn = SqlConnections.Create(connectionString))
                     {
                         using (SqlCommand command = new SqlCommand(UserDataTypeCommand.Get(database.Info.Version, database.Info.Edition), conn))
                         {
@@ -95,7 +93,9 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
                             }
                         }
                     }
-                    if (database.Options.Ignore.FilterTable)
+                    // sys.sql_dependencies is not available on Azure SQL Database.
+                    // Managed Instance still has the compatibility view.
+                    if (database.Options.Ignore.FilterTable && !database.Info.IsAzureSqlDatabase)
                         FillColumnsDependencies(database.UserTypes, connectionString);
                 }
             }

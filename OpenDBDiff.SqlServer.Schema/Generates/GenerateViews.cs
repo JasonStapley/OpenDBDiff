@@ -6,6 +6,7 @@ using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
 using System;
 using System.Collections.Generic;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -37,7 +38,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
         private void FillView(Database database, string connectionString)
         {
             int lastViewId = 0;
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(ViewSQLCommand.GetView(database.Info.Version, database.Info.Edition), conn))
                 {

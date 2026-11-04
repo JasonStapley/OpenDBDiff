@@ -2,6 +2,7 @@
 using OpenDBDiff.SqlServer.Schema.Generates.SQLCommands;
 using OpenDBDiff.SqlServer.Schema.Model;
 using System;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -19,7 +20,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             string type;
             if ((database.Options.Ignore.FilterUsers) || (database.Options.Ignore.FilterRoles))
             {
-                using (SqlConnection conn = new SqlConnection(connectioString))
+                using (SqlConnection conn = SqlConnections.Create(connectioString))
                 {
                     using (SqlCommand command = new SqlCommand(UserSQLCommand.Get(database.Info.Version, database.Info.Edition), conn))
                     {
@@ -30,13 +31,14 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
                             while (reader.Read())
                             {
                                 type = reader["type"].ToString();
-                                if (database.Options.Ignore.FilterUsers && (type.Equals("S") || type.Equals("U")))
+                                if (database.Options.Ignore.FilterUsers && IsDatabaseUser(type))
                                 {
                                     User item = new User(database);
                                     item.Id = (int)reader["principal_id"];
                                     item.Name = reader["name"].ToString();
                                     item.Login = reader["Login"].ToString();
                                     item.Owner = reader["default_schema_name"].ToString();
+                                    item.PrincipalType = type;
                                     database.Users.Add(item);
                                 }
                                 if (database.Options.Ignore.FilterRoles && (type.Equals("A") || type.Equals("R")))
@@ -58,6 +60,13 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
                     }
                 }
             }
+        }
+
+        private static bool IsDatabaseUser(string type)
+        {
+            // S and U are the on-premises SQL and Windows users. E and X are Entra
+            // principals; the on-premises query never returns them.
+            return type.Equals("S") || type.Equals("U") || type.Equals("E") || type.Equals("X");
         }
     }
 }

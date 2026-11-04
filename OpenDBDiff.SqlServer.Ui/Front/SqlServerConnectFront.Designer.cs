@@ -41,6 +41,8 @@ namespace OpenDBDiff.SqlServer.Ui
             this.cboDatabase = new System.Windows.Forms.ComboBox();
             this.label6 = new System.Windows.Forms.Label();
             this.txtUsername = new System.Windows.Forms.TextBox();
+            this.txtTenantId = new System.Windows.Forms.TextBox();
+            this.labelTenant = new System.Windows.Forms.Label();
             this.btnTest = new System.Windows.Forms.Button();
             this.lblName = new System.Windows.Forms.Label();
             this.gradientPanel1 = new System.Windows.Forms.Panel();
@@ -54,7 +56,7 @@ namespace OpenDBDiff.SqlServer.Ui
             this.txtPassword.Location = new System.Drawing.Point(82, 107);
             this.txtPassword.Name = "txtPassword";
             this.txtPassword.PasswordChar = '*';
-            this.txtPassword.Size = new System.Drawing.Size(180, 20);
+            this.txtPassword.Size = new System.Drawing.Size(270, 20);
             this.txtPassword.TabIndex = 3;
             this.txtPassword.TextChanged += new System.EventHandler(this.txtPassword_TextChanged);
             //
@@ -92,7 +94,8 @@ namespace OpenDBDiff.SqlServer.Ui
             "(local)"});
             this.cboServer.Location = new System.Drawing.Point(82, 28);
             this.cboServer.Name = "cboServer";
-            this.cboServer.Size = new System.Drawing.Size(180, 21);
+            this.cboServer.Size = new System.Drawing.Size(270, 21);
+            this.cboServer.DropDownWidth = 320;
             this.cboServer.TabIndex = 0;
             this.cboServer.SelectedIndexChanged += new System.EventHandler(this.cboServer_SelectedIndexChanged);
             this.cboServer.DropDown += new System.EventHandler(this.cboServer_DropDown);
@@ -104,10 +107,15 @@ namespace OpenDBDiff.SqlServer.Ui
             this.cboAuthentication.FormattingEnabled = true;
             this.cboAuthentication.Items.AddRange(new object[] {
             "Windows Authentication",
-            "SQL Server Authentication"});
+            "SQL Server Authentication",
+            "Azure DB",
+            "Active Directory Integrated",
+            "Active Directory Password",
+            "Active Directory Default"});
             this.cboAuthentication.Location = new System.Drawing.Point(82, 55);
             this.cboAuthentication.Name = "cboAuthentication";
-            this.cboAuthentication.Size = new System.Drawing.Size(180, 21);
+            this.cboAuthentication.Size = new System.Drawing.Size(270, 21);
+            this.cboAuthentication.DropDownWidth = 270;
             this.cboAuthentication.TabIndex = 1;
             this.cboAuthentication.SelectedIndexChanged += new System.EventHandler(this.cboAuthentication_SelectedIndexChanged);
             //
@@ -123,16 +131,16 @@ namespace OpenDBDiff.SqlServer.Ui
             // cboDatabase
             //
             this.cboDatabase.FormattingEnabled = true;
-            this.cboDatabase.Location = new System.Drawing.Point(82, 133);
+            this.cboDatabase.Location = new System.Drawing.Point(82, 159);
             this.cboDatabase.Name = "cboDatabase";
             this.cboDatabase.Size = new System.Drawing.Size(223, 21);
-            this.cboDatabase.TabIndex = 4;
+            this.cboDatabase.TabIndex = 5;
             this.cboDatabase.DropDown += new System.EventHandler(this.cboDatabase_DropDown);
             //
             // label6
             //
             this.label6.AutoSize = true;
-            this.label6.Location = new System.Drawing.Point(3, 136);
+            this.label6.Location = new System.Drawing.Point(3, 162);
             this.label6.Name = "label6";
             this.label6.Size = new System.Drawing.Size(56, 13);
             this.label6.TabIndex = 23;
@@ -142,19 +150,36 @@ namespace OpenDBDiff.SqlServer.Ui
             //
             this.txtUsername.Location = new System.Drawing.Point(82, 81);
             this.txtUsername.Name = "txtUsername";
-            this.txtUsername.Size = new System.Drawing.Size(180, 20);
+            this.txtUsername.Size = new System.Drawing.Size(270, 20);
             this.txtUsername.TabIndex = 2;
             this.txtUsername.TextChanged += new System.EventHandler(this.txtUsername_TextChanged);
+            //
+            // txtTenantId
+            //
+            this.txtTenantId.Location = new System.Drawing.Point(82, 133);
+            this.txtTenantId.Name = "txtTenantId";
+            this.txtTenantId.Size = new System.Drawing.Size(270, 20);
+            this.txtTenantId.TabIndex = 4;
+            this.txtTenantId.TextChanged += new System.EventHandler(this.txtTenantId_TextChanged);
+            //
+            // labelTenant
+            //
+            this.labelTenant.AutoSize = true;
+            this.labelTenant.Location = new System.Drawing.Point(3, 136);
+            this.labelTenant.Name = "labelTenant";
+            this.labelTenant.Size = new System.Drawing.Size(58, 13);
+            this.labelTenant.TabIndex = 28;
+            this.labelTenant.Text = "Tenant ID:";
             //
             // btnTest
             //
             this.btnTest.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnTest.FlatStyle = System.Windows.Forms.FlatStyle.System;
             this.btnTest.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnTest.Location = new System.Drawing.Point(327, 126);
+            this.btnTest.Location = new System.Drawing.Point(327, 152);
             this.btnTest.Name = "btnTest";
             this.btnTest.Size = new System.Drawing.Size(54, 28);
-            this.btnTest.TabIndex = 5;
+            this.btnTest.TabIndex = 6;
             this.btnTest.Text = "Test";
             this.btnTest.UseVisualStyleBackColor = true;
             this.btnTest.Click += new System.EventHandler(this.btnTest_Click);
@@ -199,6 +224,8 @@ namespace OpenDBDiff.SqlServer.Ui
             this.Controls.Add(this.cboDatabase);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.btnTest);
+            this.Controls.Add(this.txtTenantId);
+            this.Controls.Add(this.labelTenant);
             this.Controls.Add(this.cboAuthentication);
             this.Controls.Add(this.label5);
             this.Controls.Add(this.cboServer);
@@ -208,7 +235,7 @@ namespace OpenDBDiff.SqlServer.Ui
             this.Controls.Add(this.label3);
             this.Controls.Add(this.label2);
             this.Name = "SqlServerConnectFront";
-            this.Size = new System.Drawing.Size(384, 156);
+            this.Size = new System.Drawing.Size(384, 184);
             this.gradientPanel1.ResumeLayout(false);
             this.gradientPanel1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
@@ -221,6 +248,8 @@ namespace OpenDBDiff.SqlServer.Ui
 
         private TextBox txtPassword;
         private TextBox txtUsername;
+        private TextBox txtTenantId;
+        private Label labelTenant;
         private Label label4;
         private Label label3;
         private Label label2;

@@ -5,6 +5,7 @@ using OpenDBDiff.SqlServer.Schema.Generates.Util;
 using OpenDBDiff.SqlServer.Schema.Model;
 using System;
 using System.Linq;
+using OpenDBDiff.SqlServer.Schema.Connections;
 
 namespace OpenDBDiff.SqlServer.Schema.Generates
 {
@@ -24,7 +25,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
 
         private static void FillParameters(Database database, string connectionString)
         {
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(GetSQLParameters(), conn))
                 {
@@ -64,7 +65,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
             if ((database.Options.Ignore.FilterFunction) || (database.Options.Ignore.FilterCLRFunction))
             {
                 root.RaiseOnReading(new ProgressEventArgs("Reading functions...", Constants.READING_FUNCTIONS));
-                using (SqlConnection conn = new SqlConnection(connectionString))
+                using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     using (SqlCommand command = new SqlCommand(FunctionSQLCommand.Get(database.Info.Version, database.Info.Edition), conn))
                     {
@@ -145,7 +146,7 @@ namespace OpenDBDiff.SqlServer.Schema.Generates
 
         private static void FillReturnColumns(Database database, string connectionString)
         {
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            using (SqlConnection conn = SqlConnections.Create(connectionString))
             {
                 using (SqlCommand command = new SqlCommand(SQLQueries.SQLQueryFactory.Get("GetCLRFunctionColumns"), conn))
                 {

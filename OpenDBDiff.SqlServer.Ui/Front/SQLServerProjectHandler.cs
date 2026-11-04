@@ -145,7 +145,7 @@ namespace OpenDBDiff.SqlServer.Ui
 
         public override string ToString()
         {
-            return "SQLServer 2005 or higher";
+            return "SQL Server 2005 or higher / Azure SQL";
         }
     }
 }
