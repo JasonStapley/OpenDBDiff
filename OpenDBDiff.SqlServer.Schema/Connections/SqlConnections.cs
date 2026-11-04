@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using System;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace OpenDBDiff.SqlServer.Schema.Connections
@@ -22,6 +23,16 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
         public static string Prepare(string connectionString)
         {
             return EntraConnectionStrings.Prepare(connectionString);
+        }
+
+        /// <summary>
+        /// Window that owns the Microsoft Entra interactive prompt (the Windows account broker).
+        /// The callback may return an <see cref="IntPtr"/> handle, or null to keep the driver's
+        /// console-window fallback. It is invoked when the prompt is shown.
+        /// </summary>
+        public static void SetInteractiveParentWindow(Func<object> parentWindow)
+        {
+            EntraAuthentication.SetParentWindow(parentWindow);
         }
     }
 
@@ -45,18 +56,23 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
 
             var builder = new SqlConnectionStringBuilder(connectionString);
             string tenant = ReadTenantMarker(builder.ApplicationName);
+            if (IsEntra(builder.Authentication))
+            {
+                // Interactive sign-in needs a parent window even when no tenant was supplied.
+                EntraAuthentication.EnsureInteractiveProvider();
+                if (string.IsNullOrEmpty(tenant))
+                    EntraTenantHints.Clear(builder.DataSource);
+                else
+                    EntraTenantHints.Set(builder.DataSource, tenant);
+            }
+
             if (string.IsNullOrEmpty(tenant))
             {
                 // Leave Windows and SQL Server strings byte-for-byte unchanged.
-                // An Entra string with no tenant clears any hint stored earlier for that server.
-                if (IsEntra(builder.Authentication))
-                    EntraTenantHints.Clear(builder.DataSource);
                 return connectionString;
             }
 
             builder.Remove("Application Name");
-            EntraTenantHints.Set(builder.DataSource, tenant);
-            EntraAuthentication.EnsureTenantHintProvider();
             return builder.ConnectionString;
         }
 
@@ -153,13 +169,30 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
     internal static class EntraAuthentication
     {
         private static int installed;
+        private static Func<object> parentWindowCallback;
 
         internal static bool IsTenantHintProviderInstalled
         {
             get { return installed == 1; }
         }
 
+        internal static bool IsInteractiveProviderInstalled
+        {
+            get { return installed == 1; }
+        }
+
+        internal static void SetParentWindow(Func<object> parentWindow)
+        {
+            parentWindowCallback = parentWindow;
+            EnsureInteractiveProvider();
+        }
+
         internal static void EnsureTenantHintProvider()
+        {
+            EnsureInteractiveProvider();
+        }
+
+        internal static void EnsureInteractiveProvider()
         {
             if (System.Threading.Interlocked.Exchange(ref installed, 1) == 1)
                 return;
@@ -171,6 +204,51 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
                     SqlAuthenticationProvider.SetProvider(method, provider);
             }
         }
+
+        /// <summary>
+        /// Value passed to the driver as the interactive prompt owner.
+        /// Null lets the driver use the process console window, which is what the CLI needs.
+        /// A non-zero handle is required for the WinForms GUI, which has no console.
+        /// </summary>
+        internal static object ResolveParentWindow()
+        {
+            Func<object> callback = parentWindowCallback;
+            if (callback != null)
+            {
+                object supplied = null;
+                try
+                {
+                    supplied = callback();
+                }
+                catch (InvalidOperationException)
+                {
+                    supplied = null;
+                }
+
+                if (supplied != null)
+                    return supplied;
+            }
+
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return null;
+
+            // The CLI has a console. Leave the handle unset so the driver parents the
+            // broker to that console. A WinForms process has no console, so use the
+            // window the user is working in.
+            if (GetConsoleWindow() != IntPtr.Zero)
+                return null;
+
+            IntPtr foreground = GetForegroundWindow();
+            if (foreground != IntPtr.Zero)
+                return foreground;
+            return null;
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetConsoleWindow();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
     }
 
     /// <summary>
@@ -181,6 +259,14 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
     internal sealed class TenantHintAuthenticationProvider : SqlAuthenticationProvider
     {
         private readonly ActiveDirectoryAuthenticationProvider inner = new ActiveDirectoryAuthenticationProvider();
+
+        public TenantHintAuthenticationProvider()
+        {
+            // WAM (the Windows account broker) refuses to prompt unless it has a parent
+            // window. The built-in client id cannot turn the broker off, so every
+            // interactive sign-in goes through this callback.
+            inner.SetParentActivityOrWindowFunc(EntraAuthentication.ResolveParentWindow);
+        }
 
         public override bool IsSupported(SqlAuthenticationMethod authenticationMethod)
         {

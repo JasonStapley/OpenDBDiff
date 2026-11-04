@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OpenDBDiff.SqlServer.Schema.Connections;
+using System;
 
 namespace OpenDBDiff.Tests.Connections
 {
@@ -131,6 +132,44 @@ namespace OpenDBDiff.Tests.Connections
             Assert.AreEqual("user@contoso.com", roundTrip.UserName);
             Assert.AreEqual("contoso.onmicrosoft.com", roundTrip.TenantId);
             Assert.AreEqual("", roundTrip.Password);
+        }
+
+        [TestMethod]
+        public void InteractiveWithoutTenant_StillInstallsTheSignInProvider()
+        {
+            var settings = new SqlServerConnectionSettings
+            {
+                Server = "prompt.database.windows.net",
+                Database = "appdb",
+                Authentication = SqlServerAuthenticationMode.ActiveDirectoryInteractive,
+                UserName = "user@contoso.com"
+            };
+
+            string connectionString = settings.ToConnectionString();
+            Assert.AreEqual(connectionString, SqlConnections.Prepare(connectionString));
+            Assert.IsFalse(connectionString.Contains("EntraTenant"));
+            Assert.IsTrue(connectionString.Contains("Authentication=ActiveDirectoryInteractive"));
+            Assert.IsTrue(EntraAuthentication.IsInteractiveProviderInstalled);
+        }
+
+        [TestMethod]
+        public void InteractiveParentWindow_UsesTheWindowTheGuiSupplies()
+        {
+            Func<object> previous = null;
+            object sentinel = new object();
+            try
+            {
+                SqlConnections.SetInteractiveParentWindow(() => sentinel);
+                Assert.AreSame(sentinel, EntraAuthentication.ResolveParentWindow());
+            }
+            finally
+            {
+                SqlConnections.SetInteractiveParentWindow(previous);
+            }
+
+            // No GUI window is registered. Resolution must not throw: a console process
+            // keeps the driver's console-window fallback, and this Linux run has neither.
+            EntraAuthentication.ResolveParentWindow();
         }
 
         [TestMethod]

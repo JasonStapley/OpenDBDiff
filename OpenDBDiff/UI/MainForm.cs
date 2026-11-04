@@ -7,6 +7,7 @@ using OpenDBDiff.Abstractions.Schema.Misc;
 using OpenDBDiff.Abstractions.Schema.Model;
 using OpenDBDiff.Abstractions.Ui;
 using OpenDBDiff.Extensions;
+using OpenDBDiff.SqlServer.Schema.Connections;
 using OpenDBDiff.Settings;
 using ScintillaNET;
 using System;
@@ -41,11 +42,42 @@ namespace OpenDBDiff.UI
             splitSchema.Panel2MinSize = 200;
 
             this.Text = string.Concat(nameof(OpenDBDiff), " v", Assembly.GetExecutingAssembly().GetName().Version.ToString());
+            SqlConnections.SetInteractiveParentWindow(ActiveSignInWindow);
+        }
+
+        private IntPtr signInWindow;
+
+        /// <summary>
+        /// Owner for the Entra account-broker prompt. Active Directory Interactive fails
+        /// with 0xwindow_handle_required when this is missing, because the GUI has no console.
+        /// </summary>
+        private object ActiveSignInWindow()
+        {
+            try
+            {
+                if (!IsDisposed && !InvokeRequired)
+                {
+                    Form active = Form.ActiveForm;
+                    if (active != null && !active.IsDisposed && active.IsHandleCreated)
+                        signInWindow = active.Handle;
+                    else if (IsHandleCreated)
+                        signInWindow = Handle;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            if (signInWindow != IntPtr.Zero)
+                return signInWindow;
+            return null;
         }
 
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            if (IsHandleCreated)
+                signInWindow = Handle;
 
             // Restore after the form has its final (maximized) size, so the saved distance isn't clamped
             var distance = UiSettings.Load().SchemaSplitterDistance;
