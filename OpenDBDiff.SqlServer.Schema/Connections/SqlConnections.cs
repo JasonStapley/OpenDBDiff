@@ -23,6 +23,25 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
         {
             return EntraConnectionStrings.Prepare(connectionString);
         }
+
+        /// <summary>
+        /// Records the WinForms window that owns Azure DB sign-in. Call this on the UI
+        /// thread, with the form handle, immediately before opening the connection.
+        /// </summary>
+        public static void CaptureInteractiveOwner(IntPtr handle, string source)
+        {
+            InteractiveSignIn.CaptureHandle(handle, source);
+            EntraAuthentication.EnsureInteractiveProvider();
+        }
+
+        /// <summary>
+        /// Build marker, assembly version, process bitness, registered provider, and
+        /// whether a window handle was captured. Interactive failures include this text.
+        /// </summary>
+        public static string InteractiveDiagnostics()
+        {
+            return InteractiveSignIn.Diagnostics();
+        }
     }
 
     internal static class EntraConnectionStrings
@@ -45,18 +64,24 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
 
             var builder = new SqlConnectionStringBuilder(connectionString);
             string tenant = ReadTenantMarker(builder.ApplicationName);
+            if (IsEntra(builder.Authentication))
+            {
+                // Register before Open, including Azure DB with no tenant. Otherwise SqlClient
+                // keeps its broker provider and the net48 GUI fails with 0xwindow_handle_required.
+                EntraAuthentication.EnsureInteractiveProvider();
+                if (string.IsNullOrEmpty(tenant))
+                    EntraTenantHints.Clear(builder.DataSource);
+                else
+                    EntraTenantHints.Set(builder.DataSource, tenant);
+            }
+
             if (string.IsNullOrEmpty(tenant))
             {
                 // Leave Windows and SQL Server strings byte-for-byte unchanged.
-                // An Entra string with no tenant clears any hint stored earlier for that server.
-                if (IsEntra(builder.Authentication))
-                    EntraTenantHints.Clear(builder.DataSource);
                 return connectionString;
             }
 
             builder.Remove("Application Name");
-            EntraTenantHints.Set(builder.DataSource, tenant);
-            EntraAuthentication.EnsureTenantHintProvider();
             return builder.ConnectionString;
         }
 
@@ -159,17 +184,37 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
             get { return installed == 1; }
         }
 
+        private static TenantHintAuthenticationProvider provider;
+
         internal static void EnsureTenantHintProvider()
         {
-            if (System.Threading.Interlocked.Exchange(ref installed, 1) == 1)
-                return;
+            EnsureInteractiveProvider();
+        }
 
-            var provider = new TenantHintAuthenticationProvider();
+        internal static void EnsureInteractiveProvider()
+        {
+            if (provider == null)
+                provider = new TenantHintAuthenticationProvider();
+
+            // The Azure extension installs its broker provider when the assembly loads.
+            // SetProvider replaces that default. Repeat it on every interactive open so a
+            // later load cannot leave the broker provider in place.
+            bool interactiveReplaced = false;
             foreach (SqlAuthenticationMethod method in Enum.GetValues(typeof(SqlAuthenticationMethod)))
             {
-                if (provider.IsSupported(method))
-                    SqlAuthenticationProvider.SetProvider(method, provider);
+                if (!provider.IsSupported(method))
+                    continue;
+                bool replaced = SqlAuthenticationProvider.SetProvider(method, provider);
+                if (method == SqlAuthenticationMethod.ActiveDirectoryInteractive)
+                    interactiveReplaced = replaced;
             }
+
+            System.Threading.Interlocked.Exchange(ref installed, 1);
+            SqlAuthenticationProvider registered = SqlAuthenticationProvider.GetProvider(
+                SqlAuthenticationMethod.ActiveDirectoryInteractive);
+            string registeredName = registered == null ? "null" : registered.GetType().FullName;
+            bool isOurs = object.ReferenceEquals(registered, provider);
+            InteractiveSignIn.NoteRegistration(interactiveReplaced && isOurs, registeredName);
         }
     }
 
@@ -189,6 +234,15 @@ namespace OpenDBDiff.SqlServer.Schema.Connections
 
         public override Task<SqlAuthenticationToken> AcquireTokenAsync(SqlAuthenticationParameters parameters)
         {
+            if (parameters != null
+                && parameters.AuthenticationMethod == SqlAuthenticationMethod.ActiveDirectoryInteractive)
+            {
+                // The GUI captures a real HWND before Open. That path uses MSAL with the
+                // broker turned off. No handle means the CLI, which keeps the driver's
+                // console-window broker prompt.
+                return InteractiveSignIn.AcquireAsync(parameters, inner);
+            }
+
             string tenant;
             if (parameters != null && EntraTenantHints.TryGet(parameters.ServerName, out tenant))
             {

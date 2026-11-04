@@ -106,7 +106,7 @@ In either database panel:
 3. **Username:** the Entra user when the mode asks for it. For Azure DB it is only a hint in the browser prompt.
 4. **Tenant ID:** leave blank unless you need to override the server's tenant.
 5. **Database:** type the database name. On Azure SQL Database, `sys.databases` in a user database returns only that database, and a contained user often cannot open `master`, so the drop-down may list a single name or fail until you type one.
-6. **Test**, then compare as usual. Azure DB opens a browser window.
+6. **Test**, then compare as usual. On the WinForms app (net48, including 32-bit) Azure DB opens its own sign-in window owned by OpenDBDiff and does not use the Windows account broker. Complete MFA there. The command-line build has no form, so it still uses the driver's console prompt. A saved project stores `Authentication=Active Directory Interactive`. If sign-in fails, the message includes `interactive-browser-1`, the assembly version, `32-bit` or `64-bit`, and `handle=0x...` or `handle=none`. `handle=none` means this build did not see a window. A message without `interactive-browser-1` is from an older build.
 
 The same connection string works on the CLI (`--before` and `--after`). Examples:
 

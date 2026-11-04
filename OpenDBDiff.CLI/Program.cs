@@ -19,6 +19,7 @@ namespace OpenDBDiff.CLI
         {
         }
 
+        [STAThread]
         private static int Main(string[] args)
         {
             bool completedSuccessfully = false;

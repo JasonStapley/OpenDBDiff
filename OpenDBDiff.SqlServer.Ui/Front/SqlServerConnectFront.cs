@@ -164,6 +164,11 @@ namespace OpenDBDiff.SqlServer.Ui
         {
             try
             {
+                // The Test button runs on the UI thread. Capture the owner handle here,
+                // before Open, so interactive sign-in does not have to query WinForms later.
+                if (SqlServerConnectionSettings.IsEntra(AuthenticationMode))
+                    RememberSignInWindow("Test button");
+
                 using (SqlConnection connection = SqlConnections.Create(this.ConnectionString))
                 {
                     connection.Open();
@@ -174,8 +179,26 @@ namespace OpenDBDiff.SqlServer.Ui
             catch (Exception ex)
             {
                 ErrorConnection = ex.Message;
+                if (SqlServerConnectionSettings.IsEntra(AuthenticationMode)
+                    && (ErrorConnection == null || ErrorConnection.IndexOf(InteractiveSignInMarker, StringComparison.Ordinal) < 0))
+                {
+                    ErrorConnection += "\r\n\r\n" + SqlConnections.InteractiveDiagnostics();
+                }
                 return false;
             }
+        }
+
+        private const string InteractiveSignInMarker = "interactive-browser-1";
+
+        private void RememberSignInWindow(string source)
+        {
+            IntPtr handle = IntPtr.Zero;
+            Form owner = FindForm();
+            if (owner != null && !owner.IsDisposed && owner.IsHandleCreated)
+                handle = owner.Handle;
+            else if (IsHandleCreated)
+                handle = Handle;
+            SqlConnections.CaptureInteractiveOwner(handle, source);
         }
 
         private SqlServerConnectionSettings CurrentSettings(string database)
@@ -281,6 +304,8 @@ namespace OpenDBDiff.SqlServer.Ui
             {
                 String connectionString = ConnectionStringToDefaultDatabase;
                 ClearDatabase();
+                if (SqlServerConnectionSettings.IsEntra(AuthenticationMode))
+                    RememberSignInWindow("Database list");
                 using (SqlConnection conn = SqlConnections.Create(connectionString))
                 {
                     conn.Open();
